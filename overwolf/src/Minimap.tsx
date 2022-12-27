@@ -1,20 +1,31 @@
 import clsx from 'clsx';
 import React, { useContext, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { CSSObject } from 'tss-react';
+import { drawMapHoverLabel } from '@/Minimap/drawMapLabels';
 import { AppContext } from './contexts/AppContext';
 import { globalLayers } from './globalLayers';
-import { registerEventCallback } from './logic/hooks';
-import { getIcon, GetPlayerIcon, setIconScale } from './logic/icons';
+import { FriendData, updateFriendLocation } from './logic/friends';
+import { positionUpdateRate, registerEventCallback } from './logic/hooks';
+import { getHotkeyManager } from './logic/hotkeyManager';
 import { getMarkers } from './logic/markers';
-import { getTiles, toMinimapCoordinate } from './logic/tiles';
+import { getNavTarget, resetNav, setNav } from './logic/navigation/navigation';
+import { store } from './logic/storage';
+import { getTileCache } from './logic/tileCache';
+import { canvasCoordinateToWorld } from './logic/tiles';
+import { getNearestTown } from './logic/townLocations';
+import { rotateAround, squaredDistance } from './logic/util';
+import { townZoomDistance } from './Minimap/mapConstants';
+import useMinimapRenderer from './Minimap/useMinimapRenderer';
+import MinimapToolbars, { MinimapInteractionMode } from './MinimapToolbars';
 import { makeStyles } from './theme';
 
 interface IProps {
     className?: string;
-    isTransparentSurface?: boolean;
 }
 
-const useStyles = makeStyles()({
-    canvas: {
+const useStyles = makeStyles()(() => {
+    const canvasStyling: CSSObject = {
         width: '100%',
         height: '100%',
         position: 'fixed',
@@ -22,177 +33,284 @@ const useStyles = makeStyles()({
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: globalLayers.minimapCanvas,
-    },
+    };
+    return {
+        minimap: {
+            position: 'relative',
+        },
+        cacheStatus: {
+            background: 'rgba(0, 0, 0, 0.5)',
+            color: '#ffffff',
+            position: 'absolute',
+            left: 0,
+            bottom: 0,
+            zIndex: globalLayers.minimapCacheStatus,
+        },
+        canvas: {
+            ...canvasStyling,
+            zIndex: globalLayers.minimapCanvas,
+        },
+        hoverCanvas: {
+            ...canvasStyling,
+            zIndex: globalLayers.minimapHoverCanvas,
+            pointerEvents: 'none',
+        },
+    };
 });
 
+const tileCache = getTileCache();
+
+const hotkeyManager = getHotkeyManager();
 export default function Minimap(props: IProps) {
     const {
         className,
-        isTransparentSurface,
     } = props;
     const { classes } = useStyles();
+    const { t } = useTranslation();
 
-    const [currentPosition, setCurrentPosition] = useState<Vector2>({ x: 7728.177, y: 1988.299 });
-    const [lastPosition, setLastPosition] = useState<Vector2>({ x: 7728.177, y: 1988.299 });
-    const canvas = useRef<HTMLCanvasElement>(null);
-
-    const lastDraw = useRef(0);
     const appContext = useContext(AppContext);
 
+    const playerName = useRef<string>('UnknownFriend');
+
+    const [tilesDownloading, setTilesDownloading] = useState(0);
+    const [isMapDragging, setIsMapDragging] = useState(false);
+    const [isMapDragged, setIsMapDragged] = useState(false);
+    const [interactionMode, setInteractionMode] = useState<MinimapInteractionMode>('drag');
+    const canvas = useRef<HTMLCanvasElement>(null);
+    const hoverLabelCanvas = useRef<HTMLCanvasElement>(null);
+
+    const scrollingMap = useRef<{ pointerId: number, position: Vector2, threshold: boolean }>();
+
+    const interpolationEnabled = appContext.settings.animationInterpolation !== 'none';
+
     const dynamicStyling: React.CSSProperties = {};
-    if (isTransparentSurface) {
-        dynamicStyling.clipPath = appContext.value.shape;
+
+    if (appContext.isTransparentSurface) {
+        dynamicStyling.clipPath = appContext.settings.shape;
     }
 
-    const draw = async () => {
-        const ctx = canvas.current?.getContext('2d');
-        const currentDraw = Date.now();
-        lastDraw.current = currentDraw;
+    const {
+        currentFriends,
+        currentPlayerPosition,
+        currentPlayerAngle,
+        lastDrawParameters,
+        getZoomLevel,
+        mapOverride,
+        redraw,
+        setPlayerPosition,
+        zoomBy,
+    } = useMinimapRenderer(canvas, hoverLabelCanvas);
 
-        const angle = Math.atan2(currentPosition.x - lastPosition.x, currentPosition.y - lastPosition.y);
-        const zoomLevel = appContext.value.zoomLevel;
+    function setPosition(pos: Vector2, rotation: number) {
+        if (appContext.settings.shareLocation) {
+            const sharedLocation = updateFriendLocation(appContext.settings.channelsServerUrl, playerName.current, pos);
+            sharedLocation.then(setFriends);
+        }
 
-        setIconScale(appContext.value.iconScale);
+        store('lastKnownPosition', pos);
+        setPlayerPosition(pos, rotation);
+    }
 
-        if (!ctx) {
+    function setFriends(channels: undefined | FriendData[]) {
+        currentFriends.current = channels ?? [];
+        redraw(true);
+    }
+
+    function setNavigation(canvasPos: Vector2) {
+        if (!canvas.current) { return; }
+        const centerPos = lastDrawParameters.current?.mapRendererParams.mapCenterPosition;
+        if (!centerPos) { return; }
+        const width = canvas.current.width;
+        const height = canvas.current.height;
+
+        const town = getNearestTown(centerPos);
+        const zoomLevel = town.distance <= townZoomDistance ? appContext.settings.townZoomLevel : appContext.settings.zoomLevel;
+
+        let worldPos = canvasCoordinateToWorld(canvasPos, centerPos, zoomLevel, width, height);
+        if (appContext.settings.compassMode && (appContext.isTransparentSurface ?? false)) {
+            worldPos = rotateAround(centerPos, worldPos, -currentPlayerAngle.current);
+        }
+        const currentTarget = getNavTarget();
+
+        if (currentTarget && squaredDistance(worldPos, currentTarget) < 200) {
+            resetNav();
+        } else {
+            setNav(currentPlayerPosition.current, worldPos);
+        }
+
+        redraw(true);
+    }
+
+    function handleWheel(e: React.WheelEvent<HTMLCanvasElement>) {
+        zoomBy(getZoomLevel() / 5 * e.deltaY / 100);
+    }
+
+    function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+        if ((interactionMode === 'drag' && e.button === 0) || (interactionMode !== 'drag' && e.button === 1)) {
+            scrollingMap.current = {
+                pointerId: e.pointerId,
+                position: { x: e.pageX, y: e.pageY },
+                threshold: false,
+            };
+            setIsMapDragging(true);
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } else if ((interactionMode === 'destination' && e.button === 0) || (interactionMode === 'drag' && e.button === 1)) {
+            setNavigation({ x: e.pageX, y: e.pageY });
+        }
+    }
+
+    function onRecenterMap() {
+        mapOverride.current = undefined;
+        redraw(true);
+        setIsMapDragged(false);
+    }
+
+    function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+        if (!hoverLabelCanvas) {
             return;
         }
 
-        if (lastDraw.current !== currentDraw) {
-            return;
+        if (hoverLabelCanvas && lastDrawParameters.current && !appContext.settings.showText) {
+            const mousePos = { x: e.pageX, y: e.pageY };
+            drawMapHoverLabel(mousePos, lastDrawParameters.current, hoverLabelCanvas, appContext.settings.iconScale);
         }
 
-        ctx.canvas.width = ctx.canvas.clientWidth;
-        ctx.canvas.height = ctx.canvas.clientHeight;
-
-        const centerX = ctx.canvas.width / 2;
-        const centerY = ctx.canvas.height / 2;
-
-        const tiles = getTiles(currentPosition, ctx.canvas.width * zoomLevel, ctx.canvas.height * zoomLevel);
-        const offset = toMinimapCoordinate(currentPosition, currentPosition, ctx.canvas.width * zoomLevel, ctx.canvas.height * zoomLevel);
-
-        let toDraw: Marker[] = [];
-
-        for (let x = 0; x < tiles.length; x++) {
-            const row = tiles[x];
-            for (let y = 0; y < row.length; y++) {
-                const tile = row[y];
-                const bitmap = await tile.image;
-
-                if (lastDraw.current !== currentDraw) {
-                    return;
+        if (scrollingMap.current && scrollingMap.current.pointerId === e.pointerId) {
+            const dX = e.pageX - scrollingMap.current.position.x;
+            const dY = e.pageY - scrollingMap.current.position.y;
+            const dragAllowed = scrollingMap.current.threshold || Math.abs(dX) > 3 || Math.abs(dY) > 3;
+            if (dragAllowed) {
+                if (!scrollingMap.current.threshold) {
+                    scrollingMap.current.threshold = true;
+                    if (!mapOverride.current) {
+                        mapOverride.current = { ...currentPlayerPosition.current, angle: lastDrawParameters.current?.mapRendererParams.mapAngle ?? 0 };
+                    }
+                    setIsMapDragged(true);
+                } else if (mapOverride.current) {
+                    const angle = lastDrawParameters.current?.mapRendererParams.renderAsCompass && lastDrawParameters.current.mapRendererParams.mapAngle;
+                    const rotatedDX = angle ? dX * Math.cos(angle) - dY * Math.sin(angle) : dX;
+                    const rotatedDY = angle ? dY * Math.cos(angle) + dX * Math.sin(angle) : dY;
+                    mapOverride.current.x -= rotatedDX * getZoomLevel() / 4;
+                    mapOverride.current.y += rotatedDY * getZoomLevel() / 4;
                 }
-
-                ctx.drawImage(await tile.image,
-                    bitmap.width / zoomLevel * x + Math.floor(centerX) - offset.x / zoomLevel,
-                    bitmap.height / zoomLevel * y + Math.floor(centerY) - offset.y / zoomLevel,
-                    bitmap.width / zoomLevel,
-                    bitmap.height / zoomLevel
-                );
-
-                toDraw = toDraw.concat(await tile.markers);
+                redraw(true);
+                scrollingMap.current.position.x = e.pageX;
+                scrollingMap.current.position.y = e.pageY;
             }
         }
-
-        const iconSettings = appContext.value.iconSettings;
-
-        if (!iconSettings) {
-            return;
-        }
-
-        for (const marker of toDraw) {
-            const catSettings = iconSettings.categories[marker.category] as IconCategorySetting;
-            if (!catSettings || !catSettings.value) {
-                continue;
-            }
-
-            const typeSettings = catSettings.types[marker.type] as IconSetting;
-            if (typeSettings && !typeSettings.value) {
-                continue;
-            }
-
-            const imgPos = toMinimapCoordinate(currentPosition, marker.pos, ctx.canvas.width * zoomLevel, ctx.canvas.height * zoomLevel);
-            const icon = await getIcon(marker.type, marker.category);
-            const imgPosCorrected = { x: imgPos.x / zoomLevel - offset.x / zoomLevel + centerX, y: imgPos.y / zoomLevel - offset.y / zoomLevel + centerY };
-
-            if (lastDraw.current !== currentDraw) {
-                return;
-            }
-
-            ctx.drawImage(icon, imgPosCorrected.x - icon.width / 2, imgPosCorrected.y - icon.height / 2);
-
-            if (appContext.value.showText) {
-                ctx.textAlign = 'center';
-                ctx.font = Math.round(icon.height / 1.5) + 'px sans-serif';
-                ctx.strokeStyle = '#000';
-                ctx.strokeText(marker.type, imgPosCorrected.x, imgPosCorrected.y + icon.height);
-                ctx.fillStyle = '#fff';
-                ctx.fillText(marker.type, imgPosCorrected.x, imgPosCorrected.y + icon.height);
-            }
-        }
-
-        const playerIcon = await GetPlayerIcon();
-
-        if (lastDraw.current !== currentDraw) {
-            return;
-        }
-
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.rotate(angle);
-        ctx.translate(-centerX, -centerY);
-        ctx.drawImage(playerIcon, Math.floor(centerX - playerIcon.width / 2), Math.floor(centerY - playerIcon.height / 2));
-        ctx.restore();
-    };
-
-    // Store the `draw` function in a ref object, so we can always access the latest one.
-    const drawRef = useRef(draw);
-    drawRef.current = draw;
-
-    function redraw() {
-        // Use the `draw` in the ref to get the most up-to-date one
-        drawRef.current();
     }
 
-    function setPosition(pos: Vector2) {
-        if (pos.x === currentPosition.x && pos.y === currentPosition.y) {
-            return;
+    function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+        if (scrollingMap.current && scrollingMap.current.pointerId === e.pointerId) {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            scrollingMap.current = undefined;
+            setIsMapDragging(false);
         }
-
-        setLastPosition(currentPosition);
-        setCurrentPosition(pos);
     }
 
+    useEffect(() => tileCache.registerOnTileDownloadingCountChange(setTilesDownloading, window), []);
+
+    if (NWMM_APP_WINDOW === 'inGame') {
+        // This is alright, because the app window descriptor does not change.
+        // eslint-disable-next-line react-hooks/rules-of-hooks
+        useEffect(() => {
+            const zoomInRegistration = hotkeyManager.registerHotkey('zoomIn', () => zoomBy(getZoomLevel() / 5), window);
+            const zoomOutRegistration = hotkeyManager.registerHotkey('zoomOut', () => zoomBy(getZoomLevel() / -5), window);
+            return () => {
+                zoomInRegistration();
+                zoomOutRegistration();
+            };
+        }, [getZoomLevel()]);
+    }
+
+    // This effect starts a timer if interpolation is enabled.
     useEffect(() => {
-        redraw();
-    }, [currentPosition, appContext]);
+        let allowed = true;
+        const minFrameTime = positionUpdateRate / appContext.settings.resamplingRate;
+        let lastTimestamp = performance.now();
 
+        function animationFrame(time: DOMHighResTimeStamp) {
+            if (time - lastTimestamp >= minFrameTime) {
+                lastTimestamp = time;
+                redraw(false);
+            }
+            start();
+        }
+
+        function start() {
+            if (allowed) {
+                requestAnimationFrame(animationFrame);
+            }
+        }
+
+        start();
+
+        return function () {
+            allowed = false;
+        };
+    }, [interpolationEnabled, appContext.settings.resamplingRate]);
+
+    // This effect adds an event handler for the window resize event, triggering a redraw when it fires.
+    useEffect(() => {
+        const onResize = () => redraw(true);
+        window.addEventListener('resize', onResize);
+
+        return function () {
+            window.removeEventListener('resize', onResize);
+        };
+    }, []);
+
+    // This effect adds a registration for position updates.
     useEffect(() => {
         // Expose the setPosition and getMarkers window on the global Window object
         (window as any).setPosition = setPosition;
         (window as any).getMarkers = getMarkers;
-
-        window.addEventListener('resize', redraw);
+        (window as any).setFriends = setFriends;
 
         const callbackUnregister = registerEventCallback(info => {
-            if (info.success) {
-                if (info.res && info.res.game_info && info.res.game_info.location) {
-                    const location = JSON.parse(info.res.game_info.location) as Vector2;
-                    setPosition(location);
-                }
+            setPosition(info.position, info.rotation);
+
+            if (info.name) {
+                playerName.current = info.name;
             }
-        });
+        }, window);
 
         return function () {
-            window.removeEventListener('resize', redraw);
             callbackUnregister();
         };
-    }, [currentPosition]);
+    }, [appContext.settings]);
 
-    return <canvas
-        ref={canvas}
-        className={clsx(classes.canvas, className)}
-        style={dynamicStyling}
-    />;
+    if (isMapDragging) {
+        dynamicStyling.cursor = 'move';
+    } else if (interactionMode === 'destination') {
+        dynamicStyling.cursor = 'crosshair';
+    }
+
+    return <div className={clsx(classes.minimap, className)}>
+        <canvas
+            ref={canvas}
+            className={clsx(classes.canvas)}
+            style={dynamicStyling}
+            onWheel={handleWheel}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerMove={handlePointerMove}
+        />
+        <canvas
+            ref={hoverLabelCanvas}
+            className={clsx(classes.hoverCanvas)}
+            style={dynamicStyling}
+        />
+        <MinimapToolbars
+            getZoomLevel={getZoomLevel}
+            interactionMode={interactionMode}
+            isMapDragged={isMapDragged}
+            onRecenterMap={onRecenterMap}
+            setInteractionMode={setInteractionMode}
+            zoomBy={zoomBy}
+        />
+        <div className={classes.cacheStatus}>
+            {tilesDownloading > 0 && <p>{t('minimap.tilesLoading', { count: tilesDownloading })}</p>}
+        </div>
+    </div>;
 }

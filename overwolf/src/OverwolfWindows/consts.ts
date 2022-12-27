@@ -14,7 +14,9 @@ export type BackgroundWindow = 'background';
 export type ConcreteWindow = Exclude<keyof typeof windowNames, BackgroundWindow>;
 
 const hotkeys = {
-    toggle: 'showhide',
+    toggleInGame: 'showhide',
+    zoomIn: 'zoomIn',
+    zoomOut: 'zoomOut',
 } as const;
 
 export {

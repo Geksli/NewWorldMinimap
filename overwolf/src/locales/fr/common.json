@@ -1,0 +1,80 @@
+{
+    "lng": "Français",
+    "close": " Fermer ",
+    "selectAll": "Sélectionner tout",
+    "deselectAll": "Désélectionner tout",
+    "header": {
+        "settings": "Réglages",
+        "openInGame": "Ouvrir une fenêtre dans le jeu",
+        "openDesktop": "Ouvrir une fenêtre hors du jeu"
+    },
+    "welcome": {
+        "title": "Bienvenue sur la minicarte de CptWesley",
+        "primary": "Lancez New world pour accéder à la mini-carte",
+        "settings": "Vous pouvez également accéder aux paramètres de l'application lorsque le jeu n'est pas en cours d'exécution.",
+        "discord": "N'hésitez pas à rejoindre notre serveur Discord pour les questions, l'aide et les suggestions que vous pourriez nous faire part : <1>{{discord}}<1>.",
+        "devBuild": "Ceci semble être une version test. Utilisez le bouton ci-dessous pour accéder à la minimap à un emplacement de débogage.",
+        "forceMap": "Montrez-moi la carte"
+    },
+    "minimap": {
+        "tilesLoading_one": "Chargement de la zone {{count}}",
+        "tilesLoading_other": "Chargement de la zone {{count}}",
+        "zoomIn": "Agrandir",
+        "zoomOut": "Réduire",
+        "recenter": "Centrer sur l'emplacement du joueur"
+    },
+    "settings": {
+        "title": "Réglages",
+        "open": "Ouvrez ce menu en permanence en faisant un clic droit.",
+        "advanced": "Réglages avancés",
+        "advancedTooltip": "Réglages pour les utilisateurs avancés. Modifiez-les uniquement si vous savez ce que vous faites.",
+        "window": {
+            "_": "Cette fenêtre",
+            "transparentHeader": "En-tête transparente",
+            "transparentHeaderTooltip": "Rend l'en-tête de la fenêtre transparent lorsque la carte est affichée",
+            "transparentToolbar": "Barre d'outils transparente",
+            "transparentToolbarTooltip": "Rend les barres d'outils de la carte transparentes.",
+            "showHeader": "Afficher l'en-tête",
+            "showHeaderTooltip": "Afficher le texte et les boutons de l'en-tête lorsque la carte est affichée",
+            "showToolbar": "Afficher la barre d'outils",
+            "showToolbarTooltip": "Affiche les barres d'outils au-dessus de la carte",
+            "zoomLevel": "Niveau de zoom",
+            "zoomLevelTooltip": "Détermine le niveau de zoom sur la carte. Un zoom plus faible peut avoir un impact négatif sur les performances.",
+            "townZoom": "Zoomer automatiquement sur les villes",
+            "townZoomTooltip": "L'activer vous permettra de configurer un niveau de zoom différent dans les villes.",
+            "townZoomLevel": "Niveau de zoom pour les villes",
+            "townZoomLevelTooltip": "Détermine le niveau de zoom sur la carte lorsque vous êtes dans des villes. Un zoom plus faible peut avoir un impact négatif sur les performances.",
+            "iconScale": "Échelle de l'icône",
+            "iconScaleTooltip": "Détermine la taille du rendu des icônes",
+            "showText": " Afficher le texte ",
+            "showTextTooltip": "Contrôle si le texte est affiché sous les icônes sur la carte. L'activer peut avoir un impact négatif sur les performances.",
+            "interpolation": "Interpolation/extrapolation de l'emplacement",
+            "interpolationTooltip": "Détermine l'algorithme à utiliser pour produire un mouvement plus fluide sur la carte. Interpolation' donne les résultats les plus fluides, mais ajoute un délai à votre position. 'Aucune' donne les meilleures performances.",
+            "interpolationNone": " Aucune ",
+            "interpolationLinearInter": "Interpolation linéaire",
+            "interpolationCosineInter": "Interpolation Cosinus",
+            "interpolationLinearExtra": "Extrapolation Linéaire",
+            "interpolationCosineExtra": "Extrapolation Cosinus",
+            "resamplingRate": "Facteur d'Échantillonnage",
+            "resamplingRateTooltip": "Le nombre d'Échantillons pris lors de l'exécution de l'inter/extra-polation. Une valeur plus élevée donnera une expérience plus fluide, mais les performances seront moins bonnes."
+        },
+        "overlay": {
+            "_": "Superposition dans le jeu",
+            "compassMode": " Overlay du Mode Boussole ",
+            "compassModeTooltip": " L'activation de cette option fera que le joueur sera toujours orienté au nord et la carte tournera autour du lui, comme une minimap classique ",
+            "opacity": "Opacité de l'Overlay",
+            "opacityTooltip": "Détermine l'opacité de l'Overlay",
+            "shape": "Forme de l'Overlay",
+            "shapeTooltip": "Détermine la forme de l'Overlay",
+            "shapeRectangular": "Rectangulaire",
+            "shapeEllipse": "Ellipse",
+            "shapeDiamond": "Diamant"
+        },
+        "icon": {
+            "_": "Icônes",
+            "toggleAll": "Afficher tous",
+            "toggleVisible": "Basculer la visibilité",
+            "toggleShowLabel": "Activer ou désactiver l'affichage de cette icône"
+        }
+    }
+}

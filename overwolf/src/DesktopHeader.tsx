@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import React, { useContext, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { OWWindow } from '@overwolf/overwolf-api-ts/dist';
 import { AppContext } from './contexts/AppContext';
 import { globalLayers } from './globalLayers';
@@ -9,7 +10,7 @@ import MaximizeIcon from './Icons/MaximizeIcon';
 import Minimizeicon from './Icons/MinimizeIcon';
 import RestoreIcon from './Icons/RestoreIcon';
 import SettingsIcon from './Icons/SettingsIcon';
-import { BackgroundControllerWindow } from './OverwolfWindows/background/background';
+import { getBackgroundController } from './OverwolfWindows/background/background';
 import { windowNames } from './OverwolfWindows/consts';
 import { desktopAppTitle } from './OverwolfWindows/desktop/desktop';
 import { makeStyles } from './theme';
@@ -20,7 +21,8 @@ const useStyles = makeStyles()(theme => ({
 
         background: theme.headerBackground,
         color: theme.headerColor,
-        height: 32,
+        height: theme.headerHeight,
+        flexShrink: 0,
         overflow: 'hidden',
         zIndex: globalLayers.header,
     },
@@ -36,6 +38,16 @@ const useStyles = makeStyles()(theme => ({
         display: 'flex',
         alignItems: 'center',
         paddingLeft: theme.spacing(1),
+        minWidth: 0,
+
+        '& > *': {
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+        },
+    },
+    buttons: {
+        flexShrink: 0,
     },
     controlButton: {
         width: 42,
@@ -72,21 +84,20 @@ const useStyles = makeStyles()(theme => ({
     },
 }));
 
+const backgroundController = getBackgroundController();
 export default function DesktopHeader() {
     const context = useContext(AppContext);
     const { classes } = useStyles();
+    const { t } = useTranslation();
+
     const [desktopWindow] = useState(() => {
         return new OWWindow(windowNames.desktop);
-    });
-    const [backgroundController] = useState(() => {
-        // Each window has its own BackgroundController, due to how modules are loaded with webpack
-        // Make sure to get the instance from the background window, as that is the one with the correct state
-        return (overwolf.windows.getMainWindow().window as BackgroundControllerWindow).backgroundController;
     });
 
     const draggable = useRef<HTMLDivElement | null>(null);
     const [maximized, setMaximized] = useState(false);
-    const [gameRunning, setGameRunning] = useState(backgroundController.gameRunning);
+
+    const useTransparency = context.settings.transparentHeader && context.gameRunning && !context.appSettingsVisible;
 
     useEffect(() => {
         if (draggable.current) {
@@ -97,15 +108,13 @@ export default function DesktopHeader() {
     useEffect(() => {
         async function handleResize() {
             const windowState = await desktopWindow.getWindowState();
-            setMaximized(windowState.window_state === 'maximized');
+            setMaximized(windowState.window_state === overwolf.windows.WindowStateEx.MAXIMIZED);
         }
 
-        const gameRunningListenRegistration = backgroundController.listenOnGameRunningChange(setGameRunning);
-
+        handleResize(); // to set the initial maximized icon
         window.addEventListener('resize', handleResize);
         return () => {
             window.removeEventListener('resize', handleResize);
-            gameRunningListenRegistration();
         };
     }, []);
 
@@ -130,27 +139,29 @@ export default function DesktopHeader() {
         backgroundController.closeWindow('desktop');
     }
 
-    return <header className={clsx(classes.root, context.value.transparentHeader && classes.transparent, !context.value.showHeader && classes.hidden)}>
+    return <header className={clsx(classes.root, useTransparency && classes.transparent, !context.settings.showHeader && classes.hidden)}>
         <div ref={draggable} className={classes.draggable} onDoubleClick={handleMaximizeRestore}>
             <span>{desktopAppTitle}</span>
         </div>
-        {gameRunning && <button className={clsx(classes.controlButton)} onClick={handleShowInGameWindow}>
-            <DesktopWindowIcon />
-        </button>}
-        <button className={clsx(classes.controlButton)} onClick={context.toggleFrameMenu}>
-            <SettingsIcon />
-        </button>
-        <button className={clsx(classes.controlButton)} onClick={handleMinimize}>
-            <Minimizeicon />
-        </button>
-        <button className={clsx(classes.controlButton)} onClick={handleMaximizeRestore}>
-            {maximized
-                ? <RestoreIcon />
-                : <MaximizeIcon />
-            }
-        </button>
-        <button className={clsx(classes.controlButton, classes.close)} onClick={handleClose}>
-            <CloseIcon />
-        </button>
+        <div className={classes.buttons}>
+            {context.gameRunning && <button className={clsx(classes.controlButton)} onClick={handleShowInGameWindow} title={t('header.openInGame')}>
+                <DesktopWindowIcon />
+            </button>}
+            <button className={clsx(classes.controlButton)} onClick={context.toggleFrameMenu} title={t('header.settings')}>
+                <SettingsIcon />
+            </button>
+            <button className={clsx(classes.controlButton)} onClick={handleMinimize}>
+                <Minimizeicon />
+            </button>
+            <button className={clsx(classes.controlButton)} onClick={handleMaximizeRestore}>
+                {maximized
+                    ? <RestoreIcon />
+                    : <MaximizeIcon />
+                }
+            </button>
+            <button className={clsx(classes.controlButton, classes.close)} onClick={handleClose}>
+                <CloseIcon />
+            </button>
+        </div>
     </header>;
 }

@@ -1,0 +1,35 @@
+name: Overwolf
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2.4.1
+        with:
+          node-version: '>=14.18.0'
+
+      - name: Install dependencies
+        run: yarn install
+        working-directory: ./overwolf
+         
+      - name: Linter
+        run: yarn run lint
+        working-directory: ./overwolf
+      
+      - name: Build
+        run: yarn build:prod
+        working-directory: ./overwolf
+        
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: app-artifact
+          path: ./overwolf/releases/*.opk
+        

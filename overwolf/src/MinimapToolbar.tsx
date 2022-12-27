@@ -2,37 +2,53 @@ import clsx from 'clsx';
 import React, { useContext } from 'react';
 import { AppContext } from './contexts/AppContext';
 import { globalLayers } from './globalLayers';
-import { makeStyles, theme } from './theme';
+import { makeStyles } from './theme';
 
-const useStyles = makeStyles()(() => ({
+interface IProps {
+    className?: string;
+    hidden?: boolean;
+}
+
+const useStyles = makeStyles()(theme => ({
     toolbar: {
-        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
         zIndex: globalLayers.minimapToolbar,
-
-        margin: theme.spacing(1, 1, 0, 1),
-        padding: theme.spacing(1),
+        padding: theme.spacing(0.5),
         background: theme.toolbarBackground,
         color: theme.toolbarColor,
-        borderRadius: 4,
+        borderRadius: theme.borderRadiusMedium,
+        opacity: 1,
+        transition: 'opacity 600ms ease',
     },
     transparent: {
         background: theme.toolbarTransparentBackground,
         backdropFilter: theme.toolbarBackdropFilter,
     },
     hidden: {
-        display: 'none !important',
+        opacity: 0,
+        pointerEvents: 'none',
     },
 }));
 
-export default function MinimapToolbar(props: React.PropsWithChildren<{}>) {
+export default function MinimapToolbar(props: React.PropsWithChildren<IProps>) {
     const {
+        className,
+        hidden,
         children,
     } = props;
     const context = useContext(AppContext);
     const { classes } = useStyles();
 
+    const rootClass = clsx(
+        className,
+        classes.toolbar,
+        context.settings.transparentToolbar && classes.transparent,
+        hidden && classes.hidden,
+        className);
+
     return (
-        <div className={clsx(classes.toolbar, context.value.transparentToolbar && classes.transparent, !context.value.showToolbar && classes.hidden)}>
+        <div className={rootClass}>
             {children}
         </div>
     );

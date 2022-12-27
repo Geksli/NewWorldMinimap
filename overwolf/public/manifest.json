@@ -4,10 +4,10 @@
   "meta": {
     "name": "CptWesley's Minimap",
     "author": "Wesley Baartman",
-    "version": "1.0.0",
+    "version": "1.3.1",
     "minimum-overwolf-version": "0.92.300.0",
-    "description": "An example app for developers new to Overwolf",
-    "dock_button_title": "CptWesley's Minimap",
+    "description": "Open-source minimap for Amazon's New World.",
+    "dock_button_title": "CptWesleys Minimap",
     "icon": "icons/app_256.png",
     "icon_gray": "icons/app_256_gray.png",
     "launcher_icon": "icons/app.ico",
@@ -43,8 +43,6 @@
       "in_game": {
         "file": "in_game.html",
         "in_game_only": true,
-        "focus_game_takeover": "ReleaseOnHidden",
-        "focus_game_takeover_release_hotkey": "showhide",
         "resizable": true,
         "transparent": true,
         "override_on_update": true,
@@ -53,8 +51,8 @@
           "height": 300
         },
         "min_size": {
-          "width": 200,
-          "height": 200
+          "width": 50,
+          "height": 50
         }
       }
     },
@@ -83,6 +81,16 @@
         "title": "Show/Hide In-Game Window",
         "action-type": "toggle",
         "default": "Ctrl+F"
+      },
+      "zoomIn": {
+        "title": "Zoom in (in-game only)",
+        "action-type": "custom",
+        "default": "Ctrl+["
+      },
+      "zoomOut": {
+        "title": "Zoom out (in-game only)",
+        "action-type": "custom",
+        "default": "Ctrl+]"
       }
     },
     "protocol_override_domains": {

@@ -1,39 +1,58 @@
 import React from 'react';
+import { load, simpleStorageDefaultSettings, SimpleStorageSetting } from '../logic/storage';
 
-export interface IAppContextData {
-    showHeader: boolean;
-    showToolbar: boolean;
-    transparentHeader: boolean;
-    transparentToolbar: boolean;
-    showText: boolean;
-    iconScale: number;
-    zoomLevel: number;
-    opacity: number;
-    shape: string;
+export type AppContextSettings = SimpleStorageSetting & {
     iconSettings: IconSettings | undefined;
 }
 
 export interface IAppContext {
-    value: IAppContextData;
-    update: (delta: Partial<IAppContextData>) => void;
+    settings: AppContextSettings;
+    update: (delta: React.SetStateAction<Partial<AppContextSettings>>) => void;
     toggleFrameMenu: () => void;
+    gameRunning: boolean;
+    isTransparentSurface: boolean | undefined;
+    appSettingsVisible: boolean;
+}
+
+export function loadAppContextSettings(): AppContextSettings {
+    return {
+        showHeader: load('showHeader'),
+        showToolbar: load('showToolbar'),
+        transparentHeader: load('transparentHeader'),
+        transparentToolbar: load('transparentToolbar'),
+        showText: load('showText'),
+        showPlayerCoordinates: load('showPlayerCoordinates'),
+        iconScale: load('iconScale'),
+        zoomLevel: load('zoomLevel'),
+        opacity: load('opacity'),
+        shape: load('shape'),
+        compassMode: load('compassMode'),
+        iconSettings: undefined,
+        townZoomLevel: load('townZoomLevel'),
+        townZoom: load('townZoom'),
+        animationInterpolation: load('animationInterpolation'),
+        extrapolateLocation: load('extrapolateLocation'),
+        shareLocation: load('shareLocation'),
+        resamplingRate: load('resamplingRate'),
+        lastKnownPosition: load('lastKnownPosition'),
+        channelsServerUrl: load('channelsServerUrl'),
+        showNavMesh: load('showNavMesh'),
+        alwaysLaunchDesktop: load('alwaysLaunchDesktop'),
+        autoLaunchInGame: load('autoLaunchInGame'),
+        rotationSource: load('rotationSource'),
+    };
 }
 
 export const defaultAppContext: IAppContext = {
-    value: {
-        showHeader: true,
-        showToolbar: false,
-        transparentHeader: true,
-        transparentToolbar: true,
-        showText: false,
-        iconScale: 1.5,
-        zoomLevel: 2,
-        opacity: 1,
-        shape: 'inset(0%)',
+    settings: {
+        ...simpleStorageDefaultSettings,
         iconSettings: undefined,
     },
     update: () => { },
     toggleFrameMenu: () => { },
+    gameRunning: false,
+    isTransparentSurface: undefined,
+    appSettingsVisible: false,
 };
 
 export const AppContext = React.createContext<IAppContext>(defaultAppContext);
